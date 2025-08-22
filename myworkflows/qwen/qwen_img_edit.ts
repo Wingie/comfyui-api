@@ -226,9 +226,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "76": {
       inputs: {
         text: input.prompt,
-        prompt: input.prompt,
         clip: ["38", 0],
-        images: ["86", 0],
       },
       class_type: "TextEncodeQwenImageEdit",
       _meta: {
@@ -238,9 +236,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "77": {
       inputs: {
         text: input.negative_prompt,
-        prompt: input.negative_prompt,
         clip: ["38", 0],
-        images: ["86", 0],
       },
       class_type: "TextEncodeQwenImageEdit",
       _meta: {
