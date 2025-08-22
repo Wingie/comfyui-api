@@ -28,21 +28,21 @@ const RequestSchema = z.object({
     .max(100)
     .optional()
     .default(4)
-    .describe("Number of sampling steps"),
+    .describe("Number of sampling steps (Lightning optimized: 4 steps)"),
   cfg: z
     .number()
     .min(0)
     .max(20)
     .optional()
-    .default(1)
-    .describe("Classifier-free guidance scale"),
+    .default(1.0)
+    .describe("Classifier-free guidance scale (Lightning optimized: 1.0)"),
   sampler_name: config.samplers
     .optional()
-    .default("res_2s")
+    .default("euler")
     .describe("Name of the sampler to use"),
   scheduler: config.schedulers
     .optional()
-    .default("bong_tangent")
+    .default("simple")
     .describe("Type of scheduler to use"),
   denoise: z
     .number()
@@ -63,7 +63,7 @@ const RequestSchema = z.object({
     .min(0)
     .max(10)
     .optional()
-    .default(3.1)
+    .default(3.0)
     .describe("ModelSamplingAuraFlow shift parameter"),
   normalization_level: z
     .number()
@@ -127,17 +127,13 @@ const RequestSchema = z.object({
     .optional()
     .default("qwen_image_vae.safetensors")
     .describe("VAE model name"),
-  lora_name: z
-    .string()
-    .optional()
-    .describe("Optional LoRA model name"),
   lora_strength: z
     .number()
     .min(0)
     .max(2)
     .optional()
-    .default(1)
-    .describe("LoRA model strength"),
+    .default(1.0)
+    .describe("Lightning LoRA strength (fixed for this workflow)"),
 });
 
 type InputType = z.infer<typeof RequestSchema>;
@@ -152,7 +148,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
         sampler_name: input.sampler_name,
         scheduler: input.scheduler,
         denoise: input.denoise,
-        model: input.lora_name ? ["72", 0] : ["75", 0],
+        model: ["72", 0], // Always use LoRA-loaded model
         positive: ["76", 0],
         negative: ["77", 0],
         latent_image: ["88", 0],
@@ -210,6 +206,17 @@ function generateWorkflow(input: InputType): ComfyPrompt {
       class_type: "ModelSamplingAuraFlow",
       _meta: {
         title: "ModelSamplingAuraFlow",
+      },
+    },
+    "72": {
+      inputs: {
+        lora_name: "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+        strength_model: input.lora_strength,
+        model: ["75", 0],
+      },
+      class_type: "LoraLoaderModelOnly",
+      _meta: {
+        title: "Load Lightning LoRA (Always Enabled)",
       },
     },
     "75": {
@@ -310,7 +317,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     },
     "104": {
       inputs: {
-        filename_prefix: "ComfyUI",
+        filename_prefix: "ComfyUI_Lightning",
         images: ["102", 0],
       },
       class_type: "SaveImage",
@@ -320,29 +327,14 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     },
   };
 
-  // Add LoRA loader if specified
-  if (input.lora_name) {
-    workflow["72"] = {
-      inputs: {
-        lora_name: input.lora_name,
-        strength_model: input.lora_strength,
-        model: ["75", 0],
-      },
-      class_type: "LoraLoaderModelOnly",
-      _meta: {
-        title: "Load LoRA (Model Only)",
-      },
-    };
-  }
-
   return workflow;
 }
 
 const workflow: Workflow = {
   RequestSchema,
   generateWorkflow,
-  summary: "Qwen Image Edit",
-  description: "Edit images using Qwen Image model with advanced post-processing including sharpening and film grain",
+  summary: "Qwen Lightning LoRA Edit (4-step)",
+  description: "Fast image editing using Qwen Image model with Lightning LoRA for 4-step inference, including post-processing effects",
 };
 
 export default workflow;
