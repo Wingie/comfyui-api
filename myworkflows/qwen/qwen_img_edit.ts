@@ -86,6 +86,32 @@ const RequestSchema = z.object({
     .optional()
     .default(0.1)
     .describe("Film grain intensity"),
+  strength: z
+    .number()
+    .min(0)
+    .max(2)
+    .optional()
+    .default(1.0)
+    .describe("CFGNorm and FastLaplacianSharpen strength"),
+  upscale_method: z
+    .string()
+    .optional()
+    .default("nearest-exact")
+    .describe("Image upscaling method"),
+  saturation_mix: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .default(0.5)
+    .describe("Film grain saturation mix"),
+  grain_intensity: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .default(0.1)
+    .describe("Film grain intensity parameter"),
   unet_name: z
     .string()
     .optional()
@@ -189,6 +215,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "75": {
       inputs: {
         normalization_level: input.normalization_level,
+        strength: input.strength,
         model: ["66", 0],
       },
       class_type: "CFGNorm",
@@ -199,6 +226,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "76": {
       inputs: {
         text: input.prompt,
+        prompt: input.prompt,
         clip: ["38", 0],
         images: ["86", 0],
       },
@@ -210,6 +238,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "77": {
       inputs: {
         text: input.negative_prompt,
+        prompt: input.negative_prompt,
         clip: ["38", 0],
         images: ["86", 0],
       },
@@ -231,6 +260,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "86": {
       inputs: {
         upscale_factor: input.upscale_factor,
+        upscale_method: input.upscale_method,
         megapixels: 2,
         image: ["78", 0],
       },
@@ -252,6 +282,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "101": {
       inputs: {
         factor: input.sharpening_factor,
+        strength: input.strength,
         images: ["8", 0],
       },
       class_type: "FastLaplacianSharpen",
@@ -262,6 +293,8 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "102": {
       inputs: {
         amount: input.film_grain,
+        grain_intensity: input.grain_intensity,
+        saturation_mix: input.saturation_mix,
         size: 1.5,
         saturation: 1,
         tonality: 1,
