@@ -38,11 +38,11 @@ const RequestSchema = z.object({
     .describe("Classifier-free guidance scale (Lightning optimized: 1.0)"),
   sampler_name: config.samplers
     .optional()
-    .default("euler")
+    .default("res_2s")
     .describe("Name of the sampler to use"),
   scheduler: config.schedulers
     .optional()
-    .default("simple")
+    .default("bong_tangent")
     .describe("Type of scheduler to use"),
   denoise: z
     .number()
@@ -96,7 +96,7 @@ const RequestSchema = z.object({
   upscale_method: z
     .string()
     .optional()
-    .default("nearest-exact")
+    .default("lanczos")
     .describe("Image upscaling method"),
   saturation_mix: z
     .number()
@@ -115,7 +115,7 @@ const RequestSchema = z.object({
   unet_name: z
     .string()
     .optional()
-    .default("qwen_image_fp8_e4m3fn.safetensors")
+    .default("qwen_image_edit_fp8_e4m3fn.safetensors")
     .describe("UNET model name"),
   clip_name: z
     .string()

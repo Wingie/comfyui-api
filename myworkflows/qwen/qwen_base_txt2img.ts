@@ -16,7 +16,7 @@ const RequestSchema = z.object({
     .min(256)
     .max(2048)
     .optional()
-    .default(1328)
+    .default(1024)
     .describe("Width of the generated image"),
   height: z
     .number()
@@ -24,7 +24,7 @@ const RequestSchema = z.object({
     .min(256)
     .max(2048)
     .optional()
-    .default(1328)
+    .default(1536)
     .describe("Height of the generated image"),
   seed: z
     .number()

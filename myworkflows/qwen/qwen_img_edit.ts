@@ -63,7 +63,7 @@ const RequestSchema = z.object({
     .min(0)
     .max(10)
     .optional()
-    .default(3.1)
+    .default(3.0)
     .describe("ModelSamplingAuraFlow shift parameter"),
   normalization_level: z
     .number()
@@ -96,7 +96,7 @@ const RequestSchema = z.object({
   upscale_method: z
     .string()
     .optional()
-    .default("nearest-exact")
+    .default("lanczos")
     .describe("Image upscaling method"),
   saturation_mix: z
     .number()
@@ -115,7 +115,7 @@ const RequestSchema = z.object({
   unet_name: z
     .string()
     .optional()
-    .default("qwen_image_fp8_e4m3fn.safetensors")
+    .default("qwen_image_edit_fp8_e4m3fn.safetensors")
     .describe("UNET model name"),
   clip_name: z
     .string()
