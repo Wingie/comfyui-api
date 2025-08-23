@@ -27,22 +27,22 @@ const RequestSchema = z.object({
     .min(1)
     .max(100)
     .optional()
-    .default(4)
+    .default(20)
     .describe("Number of sampling steps"),
   cfg: z
     .number()
     .min(0)
     .max(20)
     .optional()
-    .default(1)
+    .default(2.5)
     .describe("Classifier-free guidance scale"),
   sampler_name: config.samplers
     .optional()
-    .default("res_2s")
+    .default("euler")
     .describe("Name of the sampler to use"),
   scheduler: config.schedulers
     .optional()
-    .default("bong_tangent")
+    .default("euler")
     .describe("Type of scheduler to use"),
   denoise: z
     .number()
@@ -152,7 +152,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
         sampler_name: input.sampler_name,
         scheduler: input.scheduler,
         denoise: input.denoise,
-        model: input.lora_name ? ["72", 0] : ["75", 0],
+        model: ["75", 0],
         positive: ["76", 0],
         negative: ["77", 0],
         latent_image: ["88", 0],
@@ -261,7 +261,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
       inputs: {
         upscale_factor: input.upscale_factor,
         upscale_method: input.upscale_method,
-        megapixels: 2,
+        megapixels: 1,
         image: ["78", 0],
       },
       class_type: "ImageScaleToTotalPixels",
@@ -320,19 +320,22 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     },
   };
 
-  // Add LoRA loader if specified
+  // Add LoRA loader only if specified (standard workflow without LoRA by default)
   if (input.lora_name) {
     workflow["72"] = {
       inputs: {
         lora_name: input.lora_name,
         strength_model: input.lora_strength,
-        model: ["75", 0],
+        model: ["37", 0],
       },
       class_type: "LoraLoaderModelOnly",
       _meta: {
-        title: "Load LoRA (Model Only)",
+        title: "Load LoRA (Optional)",
       },
     };
+    
+    // If LoRA is used, connect it in the chain
+    workflow["66"].inputs.model = ["72", 0];
   }
 
   return workflow;

@@ -27,22 +27,22 @@ const RequestSchema = z.object({
     .min(1)
     .max(100)
     .optional()
-    .default(4)
-    .describe("Number of sampling steps (Lightning optimized: 4 steps)"),
+    .default(20)
+    .describe("Number of sampling steps (Lightning: 20 steps for quality)"),
   cfg: z
     .number()
     .min(0)
     .max(20)
     .optional()
-    .default(1.0)
-    .describe("Classifier-free guidance scale (Lightning optimized: 1.0)"),
+    .default(2.5)
+    .describe("Classifier-free guidance scale (Lightning: 2.5 for quality)"),
   sampler_name: config.samplers
     .optional()
-    .default("res_2s")
+    .default("euler")
     .describe("Name of the sampler to use"),
   scheduler: config.schedulers
     .optional()
-    .default("bong_tangent")
+    .default("simple")
     .describe("Type of scheduler to use"),
   denoise: z
     .number()
@@ -201,7 +201,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
     "66": {
       inputs: {
         shift: input.shift,
-        model: ["37", 0],
+        model: ["72", 0],
       },
       class_type: "ModelSamplingAuraFlow",
       _meta: {
@@ -212,7 +212,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
       inputs: {
         lora_name: "Qwen-Image-Lightning-4steps-V1.0.safetensors",
         strength_model: input.lora_strength,
-        model: ["75", 0],
+        model: ["37", 0],
       },
       class_type: "LoraLoaderModelOnly",
       _meta: {
@@ -268,7 +268,7 @@ function generateWorkflow(input: InputType): ComfyPrompt {
       inputs: {
         upscale_factor: input.upscale_factor,
         upscale_method: input.upscale_method,
-        megapixels: 2,
+        megapixels: 1,
         image: ["78", 0],
       },
       class_type: "ImageScaleToTotalPixels",
@@ -333,8 +333,8 @@ function generateWorkflow(input: InputType): ComfyPrompt {
 const workflow: Workflow = {
   RequestSchema,
   generateWorkflow,
-  summary: "Qwen Lightning LoRA Edit (4-step)",
-  description: "Fast image editing using Qwen Image model with Lightning LoRA for 4-step inference, including post-processing effects",
+  summary: "Qwen Lightning LoRA Edit (20-step)",
+  description: "Quality image editing using Qwen Image model with Lightning LoRA for 20-step inference, including post-processing effects",
 };
 
 export default workflow;

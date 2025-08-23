@@ -45,8 +45,8 @@ These workflows utilize the Qwen Image models for advanced image generation and 
 - `seed` (number, optional): Seed for random number generation
 - `steps` (number, optional, default: 4): Number of sampling steps (1-100)
 - `cfg` (number, optional, default: 1): Classifier-free guidance scale (0-20)
-- `sampler_name` (string, optional, default: "res_2s"): Name of the sampler to use
-- `scheduler` (string, optional, default: "bong_tangent"): Type of scheduler to use
+- `sampler_name` (string, optional): Name of the sampler to use
+- `scheduler` (string, optional) Type of scheduler to use
 - `denoise` (number, optional, default: 1): Denoising strength (0-1)
 - `upscale_factor` (number, optional, default: 1.25): Image upscale factor before processing (0.5-4)
 - `shift` (number, optional, default: 3.1): ModelSamplingAuraFlow shift parameter (0-10)
