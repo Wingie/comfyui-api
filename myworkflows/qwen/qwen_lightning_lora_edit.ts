@@ -72,20 +72,6 @@ const RequestSchema = z.object({
     .optional()
     .default(1)
     .describe("CFG normalization level"),
-  sharpening_factor: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .default(0.2)
-    .describe("Laplacian sharpening factor"),
-  film_grain: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .default(0.1)
-    .describe("Film grain intensity"),
   strength: z
     .number()
     .min(0)
@@ -98,20 +84,6 @@ const RequestSchema = z.object({
     .optional()
     .default("lanczos")
     .describe("Image upscaling method"),
-  saturation_mix: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .default(0.5)
-    .describe("Film grain saturation mix"),
-  grain_intensity: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .default(0.1)
-    .describe("Film grain intensity parameter"),
   unet_name: z
     .string()
     .optional()
@@ -286,39 +258,10 @@ function generateWorkflow(input: InputType): ComfyPrompt {
         title: "VAE Encode",
       },
     },
-    "101": {
-      inputs: {
-        factor: input.sharpening_factor,
-        strength: input.strength,
-        images: ["8", 0],
-      },
-      class_type: "FastLaplacianSharpen",
-      _meta: {
-        title: "Fast Laplacian Sharpen",
-      },
-    },
-    "102": {
-      inputs: {
-        amount: input.film_grain,
-        grain_intensity: input.grain_intensity,
-        saturation_mix: input.saturation_mix,
-        size: 1.5,
-        saturation: 1,
-        tonality: 1,
-        sigma: 1,
-        adaptive: "log",
-        seed: input.seed,
-        images: ["101", 0],
-      },
-      class_type: "FastFilmGrain",
-      _meta: {
-        title: "Fast Film Grain",
-      },
-    },
     "104": {
       inputs: {
         filename_prefix: "ComfyUI_Lightning",
-        images: ["102", 0],
+        images: ["8", 0],
       },
       class_type: "SaveImage",
       _meta: {
