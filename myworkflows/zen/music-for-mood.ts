@@ -5,10 +5,13 @@ import config from "../../src/config";
 /**
  * ACE-Step 1.5 Meditation Music Generation Workflow
  *
- * Generates meditation music based on mood and stress level using ACE-Step 1.5 model.
+ * Generates instrumental meditation music based on mood and stress level using ACE-Step 1.5.
  *
- * ComfyUI Node Flow:
- * CheckpointLoader → TextEncode → EmptyLatentAudio → KSampler → SaveAudio
+ * ComfyUI Node Flow (verified against official workflow templates):
+ * CheckpointLoader → ModelSamplingAuraFlow → TextEncodeAceStepAudio1.5 → EmptyAceStep1.5LatentAudio → KSampler → VAEDecodeAudio → SaveAudioMP3
+ *
+ * Based on official ComfyUI workflow:
+ * https://github.com/Comfy-Org/workflow_templates/blob/main/templates/audio_ace_step_1_5_checkpoint.json
  *
  * References:
  * - https://docs.comfy.org/tutorials/audio/ace-step/ace-step-v1-5
@@ -21,36 +24,26 @@ const RequestSchema = z.object({
     .describe("Meditation mood/intention for music generation"),
 
   stress_level: z.number().int().min(1).max(10)
-    .describe("User stress level (1-10, affects intensity)"),
+    .describe("User stress level (1-10, affects intensity and instrumentation)"),
 
   duration: z.number().int().min(5).max(60)
     .describe("Music duration in minutes"),
 
-  style: z.enum(['ambient', 'nature', 'binaural', 'silence'])
-    .optional()
-    .default('ambient')
-    .describe("Music style/genre for meditation"),
-
-  tempo: z.enum(['slow', 'medium', 'upbeat'])
-    .optional()
-    .default('slow')
-    .describe("Music tempo/pace"),
-
+  // Advanced parameters (optional - reasonable defaults)
   seed: z.number().int()
     .optional()
     .default(() => Math.floor(Math.random() * 1000000000000000))
     .describe("Random seed for reproducibility"),
 
-  // Advanced sampling parameters
   steps: z.number().int().min(1).max(50)
     .optional()
-    .default(20)
-    .describe("Number of sampling steps (more steps = higher quality)"),
+    .default(8)
+    .describe("Number of sampling steps (ACE-Step 1.5 Turbo default: 8)"),
 
   cfg_scale: z.number().min(1).max(20)
     .optional()
-    .default(7.0)
-    .describe("Classifier-free guidance scale (how closely to follow prompt)"),
+    .default(3.5)
+    .describe("Classifier-free guidance scale (ACE-Step 1.5 Turbo default: 3.5)"),
 
   sampler_name: config.samplers
     .optional()
@@ -59,7 +52,7 @@ const RequestSchema = z.object({
 
   scheduler: config.schedulers
     .optional()
-    .default("normal")
+    .default("simple")
     .describe("Scheduler for sampling"),
 
   denoise: z.number().min(0.1).max(1.0)
@@ -71,71 +64,95 @@ const RequestSchema = z.object({
   checkpoint_name: z.string()
     .optional()
     .default("ace_step_1.5_turbo_aio.safetensors")
-    .describe("ACE-Step checkpoint model name"),
+    .describe("ACE-Step 1.5 checkpoint model name"),
 });
 
 type InputType = z.infer<typeof RequestSchema>;
 
 /**
- * Generate ACE-Step prompt tags based on mood and parameters
+ * Generate ACE-Step CAPTION (descriptive text about music style)
+ *
+ * This is the primary prompt that describes the music generation.
+ * ACE-Step 1.5 uses natural language descriptions rather than comma-separated tags.
  */
-function generatePromptTags(input: InputType): string {
-  // Base meditation style mapping
-  const styleDescriptors: Record<string, string> = {
-    'ambient': 'ambient soundscape, peaceful atmosphere, soft textures',
-    'nature': 'nature sounds, forest ambiance, water flowing, birds chirping',
-    'binaural': 'binaural beats, theta waves, isochronic tones, brainwave entrainment',
-    'silence': 'minimal music, sparse notes, deep silence, space between sounds'
+function generateCaption(input: InputType): string {
+  // Base meditation description
+  let caption = "Meditation music: ";
+
+  // Mood-specific descriptions
+  const moodDescriptions: Record<string, string> = {
+    'calm': 'A peaceful ambient soundscape with gentle textures and calming frequencies. Soft, serene atmosphere perfect for deep relaxation and mindfulness meditation.',
+    'anxious': 'Soothing meditation music designed for anxiety relief. Grounding frequencies with stable, comforting tones that promote emotional balance and inner peace.',
+    'stressed': 'Stress-relief meditation music with tension-releasing frequencies. Deep relaxation soundscape with unwinding, restorative qualities for mental clarity.',
+    'tired': 'Restful sleep meditation music with sleep-inducing frequencies. Very slow, drowsy atmosphere perfect for bedtime relaxation and deep rest.',
+    'energized': 'Uplifting meditation music for focus and mental clarity. Energizing yet calm frequencies that enhance alertness and concentration for morning meditation.'
   };
 
-  // Mood-specific descriptors
-  const moodDescriptors: Record<string, string> = {
-    'calm': 'peaceful, serene, gentle, calming frequencies, relaxation',
-    'anxious': 'soothing, anxiety relief, grounding, stability, comfort',
-    'stressed': 'stress relief, tension release, deep relaxation, unwinding',
-    'tired': 'restful, sleep-inducing, deep relaxation, drowsy, bedtime music',
-    'energized': 'uplifting, energizing, focus enhancement, clarity, alertness'
-  };
+  caption += moodDescriptions[input.mood];
 
-  // Tempo adjustments
-  const tempoDescriptors: Record<string, string> = {
-    'slow': 'slow tempo, 40-60 BPM, very slow, meditative pace',
-    'medium': 'medium tempo, 70-90 BPM, moderate pace, flowing',
-    'upbeat': 'upbeat tempo, 100-120 BPM, energizing rhythm'
-  };
-
-  // Stress level influences intensity
-  let intensityDescriptor = '';
+  // Add instrumentation based on stress level
   if (input.stress_level >= 8) {
-    intensityDescriptor = 'deep healing, profound relaxation, intensive therapy';
+    caption += ' Features singing bowls, deep drones, and minimal ambient pads for profound healing.';
   } else if (input.stress_level >= 5) {
-    intensityDescriptor = 'moderate relaxation, balanced energy, gentle healing';
+    caption += ' Incorporates soft piano, ambient synth, gentle strings, and nature sounds for balanced healing.';
   } else {
-    intensityDescriptor = 'light relaxation, subtle energy, maintenance';
+    caption += ' Includes acoustic guitar, flute, chimes, and soft pads for light relaxation.';
   }
 
-  // Combine all descriptors into prompt tags
-  const tags = [
-    'meditation music',
-    'instrumental',
-    moodDescriptors[input.mood],
-    styleDescriptors[input.style],
-    tempoDescriptors[input.tempo],
-    intensityDescriptor,
-    'no vocals',
-    'continuous flow',
-    'smooth transitions'
-  ].join(', ');
+  caption += ' Pure instrumental with smooth transitions and continuous flow. No vocals.';
 
-  return tags;
+  return caption;
 }
 
 /**
- * Generate ComfyUI workflow for ACE-Step meditation music
+ * Generate ACE-Step LYRICS field
+ *
+ * For meditation music, we use [inst] tag for pure instrumental sections.
+ * Structure tags ([intro], [verse], [bridge], [outro]) help organize the music flow.
+ */
+function generateLyrics(input: InputType): string {
+  // For meditation music, we want instrumental with structure
+  const duration_minutes = input.duration;
+
+  if (duration_minutes <= 10) {
+    // Short meditation: simple structure
+    return `[intro]\n[inst]\n[outro]`;
+  } else if (duration_minutes <= 30) {
+    // Medium meditation: more variation
+    return `[intro]\n[inst]\n[bridge]\n[inst]\n[outro]`;
+  } else {
+    // Long meditation: full structure with multiple sections
+    return `[intro]\n[inst]\n[bridge]\n[inst]\n[bridge]\n[inst]\n[outro]`;
+  }
+}
+
+/**
+ * Calculate BPM based on mood and stress level
+ */
+function calculateBPM(input: InputType): number {
+  if (input.mood === 'energized') {
+    return 100; // Upbeat for energy
+  } else if (input.mood === 'tired') {
+    return 40; // Very slow for sleep
+  } else if (input.stress_level >= 8) {
+    return 50; // Extra slow for high stress
+  } else if (input.stress_level <= 3) {
+    return 70; // Moderate for low stress
+  } else {
+    return 60; // Default slow
+  }
+}
+
+/**
+ * Generate ComfyUI workflow for ACE-Step 1.5 meditation music
+ *
+ * Structure verified against official ComfyUI workflow templates.
  */
 function generateWorkflow(input: InputType): ComfyPrompt {
-  const promptTags = generatePromptTags(input);
+  const caption = generateCaption(input);
+  const lyrics = generateLyrics(input);
   const duration_seconds = input.duration * 60;
+  const bpm = calculateBPM(input);
 
   return {
     // Node 1: Load ACE-Step checkpoint
@@ -145,48 +162,74 @@ function generateWorkflow(input: InputType): ComfyPrompt {
       },
       class_type: "CheckpointLoaderSimple",
       _meta: {
-        title: "Load ACE-Step Checkpoint",
+        title: "Load ACE-Step 1.5 Checkpoint",
       },
     },
 
-    // Node 2: Create empty latent audio with specified duration
+    // Node 2: Model Sampling for ACE-Step (AuraFlow sampling)
     "2": {
+      inputs: {
+        model: ["1", 0], // MODEL from checkpoint
+        shift: 3.0, // ACE-Step 1.5 uses shift of 3
+      },
+      class_type: "ModelSamplingAuraFlow",
+      _meta: {
+        title: "Model Sampling (AuraFlow)",
+      },
+    },
+
+    // Node 3: Create empty latent audio with specified duration
+    "3": {
       inputs: {
         seconds: duration_seconds,
         batch_size: 1,
       },
-      class_type: "EmptyAceStepLatentAudio",
+      class_type: "EmptyAceStep1.5LatentAudio",
       _meta: {
-        title: "Empty Latent Audio",
+        title: `Empty Latent Audio (${input.duration} min)`,
       },
     },
 
-    // Node 3: Encode positive prompt (meditation tags)
-    "3": {
-      inputs: {
-        text: promptTags,
-        clip: ["1", 1], // CLIP output from checkpoint
-      },
-      class_type: "CLIPTextEncode",
-      _meta: {
-        title: "Encode Meditation Prompt",
-      },
-    },
-
-    // Node 4: Encode negative prompt (unwanted elements)
+    // Node 4: Encode caption and lyrics (ACE-Step 1.5 specific node)
+    // NOTE: Parameters are in widgets_values, not inputs!
     "4": {
       inputs: {
-        text: "harsh sounds, loud noises, aggressive music, vocals, singing, lyrics, drums, percussion, dissonance, jarring transitions, abrupt changes",
         clip: ["1", 1], // CLIP output from checkpoint
+        seed: input.seed,
+        duration: duration_seconds,
       },
-      class_type: "CLIPTextEncode",
+      class_type: "TextEncodeAceStepAudio1.5",
       _meta: {
-        title: "Encode Negative Prompt",
+        title: "Encode Meditation Prompt (ACE-Step 1.5)",
+      },
+      // Widgets values define the actual prompt structure:
+      // [caption, lyrics, seed, seed_mode, lyrics_sample_length, bpm, time_signature, language, key]
+      widgets_values: [
+        caption,           // Music description
+        lyrics,            // Lyric structure with [inst] tags
+        input.seed,        // Seed for reproducibility
+        "fixed",           // seed_mode
+        190,               // lyrics_sample_length (default from ACE-Step)
+        bpm,               // BPM calculated from mood/stress
+        "4",               // time_signature (4/4 time)
+        "en",              // language
+        "C major"          // key (neutral key for meditation)
+      ],
+    },
+
+    // Node 5: Zero out conditioning (ACE-Step pattern)
+    "5": {
+      inputs: {
+        conditioning: ["4", 0],
+      },
+      class_type: "ConditioningZeroOut",
+      _meta: {
+        title: "Zero Out Conditioning",
       },
     },
 
-    // Node 5: KSampler - generate audio
-    "5": {
+    // Node 6: KSampler - generate audio
+    "6": {
       inputs: {
         seed: input.seed,
         steps: input.steps,
@@ -194,10 +237,10 @@ function generateWorkflow(input: InputType): ComfyPrompt {
         sampler_name: input.sampler_name,
         scheduler: input.scheduler,
         denoise: input.denoise,
-        model: ["1", 0], // MODEL output from checkpoint
-        positive: ["3", 0], // Positive conditioning
-        negative: ["4", 0], // Negative conditioning
-        latent_image: ["2", 0], // Empty latent audio
+        model: ["2", 0], // MODEL from ModelSamplingAuraFlow
+        positive: ["4", 0], // Conditioning from TextEncodeAceStepAudio1.5
+        negative: ["5", 0], // Zeroed conditioning
+        latent_image: ["3", 0], // Empty latent audio
       },
       class_type: "KSampler",
       _meta: {
@@ -205,27 +248,27 @@ function generateWorkflow(input: InputType): ComfyPrompt {
       },
     },
 
-    // Node 6: VAE Decode - convert latent to audio
-    "6": {
+    // Node 7: VAE Decode - convert latent to audio
+    "7": {
       inputs: {
-        samples: ["5", 0], // Latent output from KSampler
+        samples: ["6", 0], // Latent output from KSampler
         vae: ["1", 2], // VAE output from checkpoint
       },
-      class_type: "VAEDecode",
+      class_type: "VAEDecodeAudio",
       _meta: {
         title: "VAE Decode Audio",
       },
     },
 
-    // Node 7: Save audio to output directory
-    "7": {
+    // Node 8: Save audio to MP3
+    "8": {
       inputs: {
-        filename_prefix: `meditation_${input.mood}_${input.stress_level}`,
-        audio: ["6", 0], // Decoded audio
+        filename_prefix: `meditation_${input.mood}_stress${input.stress_level}`,
+        audio: ["7", 0], // Decoded audio
       },
-      class_type: "SaveAudio",
+      class_type: "SaveAudioMP3",
       _meta: {
-        title: "Save Meditation Music",
+        title: "Save Meditation Music (MP3)",
       },
     },
   };
@@ -234,8 +277,8 @@ function generateWorkflow(input: InputType): ComfyPrompt {
 const workflow: Workflow = {
   RequestSchema,
   generateWorkflow,
-  summary: "ACE-Step 1.5 Meditation Music Generation",
-  description: "Generate meditation music based on mood, stress level, and preferences using ACE-Step 1.5. Supports multiple styles (ambient, nature, binaural, silence) and moods (calm, anxious, stressed, tired, energized) with configurable duration (5-60 minutes) and tempo.",
+  summary: "ACE-Step 1.5 Meditation Music Generation (Instrumental)",
+  description: "Generate instrumental meditation music based on mood and stress level using ACE-Step 1.5 Turbo. Music is generated with appropriate tempo (40-100 BPM), instrumentation, and structure based on user's emotional state. All music is instrumental (no vocals) with smooth transitions. Supports moods: calm, anxious, stressed, tired, energized. Duration: 5-60 minutes. Workflow structure verified against official ComfyUI templates.",
 };
 
 export default workflow;
